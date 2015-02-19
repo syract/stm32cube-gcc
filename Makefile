@@ -15,7 +15,7 @@ BOARD      = STM32F072B-Discovery
 OCDFLAGS   = -f board/stm32f0discovery.cfg
 GDBFLAGS   = 
 
-EXAMPLE    = Examples/GPIO/GPIO_IOToggle
+EXAMPLE    = Templates
 
 # MCU family and type in various capitalizations o_O
 MCU_FAMILY = stm32f0xx
@@ -26,13 +26,10 @@ MCU_UC     = STM32F072RB
 # Your C files from the /src directory
 SRCS       = main.c
 SRCS      += system_$(MCU_FAMILY).c
-SRCS      += stm32f0xx_it.c
+SRCS      += stm32f0xx_hal_msp.c stm32f0xx_it.c
 
-SRCS      += stm32f0xx_hal_rcc.c
-SRCS      += stm32f0xx_hal_rcc_ex.c
-SRCS      += stm32f0xx_hal.c
-SRCS      += stm32f0xx_hal_cortex.c
-SRCS      += stm32f0xx_hal_gpio.c
+# Basic HAL libararies
+SRCS      += stm32f0xx_hal.c stm32f0xx_hal_rcc.c stm32f0xx_hal_rcc_ex.c stm32f0xx_hal_cortex.c
 
 CUBE_URL   = http://www.st.com/st-web-ui/static/active/en/st_prod_software_internet/resource/technical/software/firmware/stm32cubef0.zip
 CUBE_DIR   = cube
@@ -64,7 +61,9 @@ OCD        = openocd
 # Options
 
 # Defines
-DEFS       = -D $(MCU_MC)
+DEFS       = -D$(MCU_MC) -DUSE_HAL_DRIVER -DUSE_STM32F072B_DISCO
+# Debug specific definitions
+DEFS       += -DUSE_DBPRINTF
 
 # Include search paths (-I)
 INCS       = -I src
@@ -79,17 +78,21 @@ LIBS       = -L $(CMSIS_DIR)/Lib
 # Compiler flags
 CFLAGS     = -Wall -g -std=c99 -Os
 CFLAGS    += -mlittle-endian -mcpu=cortex-m0 -mthumb
-CFLAGS    += -DSTM32F072xB -DUSE_HAL_DRIVER -DUSE_STM32F072B_DISCO
 CFLAGS    += -ffunction-sections -fdata-sections
 CFLAGS    += $(INCS) $(DEFS)
 
 # Linker flags
 LDFLAGS    = -Wl,--gc-sections -Wl,-Map=$(TARGET).map $(LIBS) -T linker/$(MCU_LC).ld
 
+# Semihosting flags
+SEMIHOSTING_FLAGS = --specs=rdimon.specs -lc -lrdimon
+
 # Source search paths
 VPATH      = ./src
 VPATH     += $(HAL_DIR)/Src
 VPATH     += $(DEV_DIR)/Source/
+# Specific middlewares.
+VPATH      += $(BSP_DIR)
 
 OBJS       = $(addprefix obj/,$(SRCS:.c=.o))
 DEPS       = $(addprefix dep/,$(SRCS:.c=.d))
@@ -103,7 +106,7 @@ endif
 
 ###################################################
 
-.PHONY: all dirs program debug template clean
+.PHONY: all dirs program debug openocd template clean
 
 all: $(TARGET).elf
 
@@ -120,7 +123,7 @@ obj/%.o : %.c | dirs
 
 $(TARGET).elf: $(OBJS)
 	@echo "[LD]      $(TARGET).elf"
-	$Q$(CC) $(CFLAGS) $(LDFLAGS) src/startup_$(MCU_LC).s $^ -o $@
+	$Q$(CC) $(SEMIHOSTING_FLAGS) $(CFLAGS) $(LDFLAGS) src/startup_$(MCU_LC).s $^ -o $@
 	@echo "[OBJDUMP] $(TARGET).lst"
 	$Q$(OBJDUMP) -St $(TARGET).elf >$(TARGET).lst
 	@echo "[SIZE]    $(TARGET).elf"
@@ -129,10 +132,11 @@ $(TARGET).elf: $(OBJS)
 program: all
 	$(OCD) -s $(OCD_DIR) $(OCDFLAGS) -c "program $(TARGET).elf verify reset"
 
+openocd:
+	$(OCD) -s $(OCD_DIR) $(OCDFLAGS)
+
 debug:
-	$(GDB)  -ex "target remote | openocd $(OCDFLAGS) -c 'gdb_port pipe'" \
-		-ex "monitor reset halt" \
-		-ex "load" $(GDBFLAGS) $(TARGET).elf
+	$(GDB) $(GDBFLAGS) $(TARGET).elf
 
 cube:
 	wget -O cube.zip $(CUBE_URL)
@@ -153,4 +157,3 @@ clean:
 	@echo "[RM]      $(TARGET).lst"; rm -f $(TARGET).lst
 	@echo "[RMDIR]   dep"          ; rm -fr dep
 	@echo "[RMDIR]   obj"          ; rm -fr obj
-
