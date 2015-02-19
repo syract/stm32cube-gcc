@@ -10,50 +10,40 @@
 TARGET     = demo
 
 # Take a look into $(CUBE_DIR)/Drivers/BSP for available BSPs
-BOARD      = STM32F3-Discovery
-#BOARD     = STM32303C_EVAL
-#BOARD     = STM32303E_EVAL
-#BOARD     = STM32373C_EVAL
-#BOARD     = STM32F302R8-Nucleo
-#BOARD     = STM32F303RE-Nucleo
-#BOARD     = STM32F3348-Discovery
-#BOARD     = STM32F334R8-Nucleo
-#BOARD     = STM32F3-Discovery
-#BOARD     = Adafruit_Shield
+BOARD      = STM32F072B-Discovery
 
-OCDFLAGS   = -f board/stm32f3discovery.cfg
+OCDFLAGS   = -f board/stm32f0discovery.cfg
 GDBFLAGS   = 
 
-#EXAMPLE   = Templates
 EXAMPLE    = Examples/GPIO/GPIO_IOToggle
 
 # MCU family and type in various capitalizations o_O
-MCU_FAMILY = stm32f3xx
-MCU_LC     = stm32f303xc
-MCU_MC     = STM32F303xC
-MCU_UC     = STM32F303XC
+MCU_FAMILY = stm32f0xx
+MCU_LC     = stm32f072xb
+MCU_MC     = STM32F072xB
+MCU_UC     = STM32F072RB
 
 # Your C files from the /src directory
 SRCS       = main.c
 SRCS      += system_$(MCU_FAMILY).c
-SRCS      += stm32f3xx_it.c
+SRCS      += stm32f0xx_it.c
 
-SRCS      += stm32f3xx_hal_rcc.c
-SRCS      += stm32f3xx_hal_rcc_ex.c
-SRCS      += stm32f3xx_hal.c
-SRCS      += stm32f3xx_hal_cortex.c
-SRCS      += stm32f3xx_hal_gpio.c
+SRCS      += stm32f0xx_hal_rcc.c
+SRCS      += stm32f0xx_hal_rcc_ex.c
+SRCS      += stm32f0xx_hal.c
+SRCS      += stm32f0xx_hal_cortex.c
+SRCS      += stm32f0xx_hal_gpio.c
 
-CUBE_URL   = http://www.st.com/st-web-ui/static/active/en/st_prod_software_internet/resource/technical/software/firmware/stm32cubef3.zip
+CUBE_URL   = http://www.st.com/st-web-ui/static/active/en/st_prod_software_internet/resource/technical/software/firmware/stm32cubef0.zip
 CUBE_DIR   = cube
 
 BSP_DIR    = $(CUBE_DIR)/Drivers/BSP/$(BOARD)
-HAL_DIR    = $(CUBE_DIR)/Drivers/STM32F3xx_HAL_Driver
+HAL_DIR    = $(CUBE_DIR)/Drivers/STM32F0xx_HAL_Driver
 CMSIS_DIR  = $(CUBE_DIR)/Drivers/CMSIS
-DEV_DIR    = $(CMSIS_DIR)/Device/ST/STM32F3xx
+DEV_DIR    = $(CMSIS_DIR)/Device/ST/STM32F0xx
 
 # location of OpenOCD Board .cfg files (only used with 'make program')
-OCD_DIR    = /usr/share/openocd/scripts/board
+OCD_DIR    = ../resources/openocd-bin/share/openocd/scripts/
 
 # that's it, no need to change anything below this line!
 
@@ -88,13 +78,13 @@ LIBS       = -L $(CMSIS_DIR)/Lib
 
 # Compiler flags
 CFLAGS     = -Wall -g -std=c99 -Os
-CFLAGS    += -mlittle-endian -mcpu=cortex-m4 -march=armv7e-m -mthumb
-CFLAGS    += -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+CFLAGS    += -mlittle-endian -mcpu=cortex-m0 -mthumb
+CFLAGS    += -DSTM32F072xB -DUSE_HAL_DRIVER -DUSE_STM32F072B_DISCO
 CFLAGS    += -ffunction-sections -fdata-sections
 CFLAGS    += $(INCS) $(DEFS)
 
 # Linker flags
-LDFLAGS    = -Wl,--gc-sections -Wl,-Map=$(TARGET).map $(LIBS) -T $(MCU_LC).ld
+LDFLAGS    = -Wl,--gc-sections -Wl,-Map=$(TARGET).map $(LIBS) -T linker/$(MCU_LC).ld
 
 # Source search paths
 VPATH      = ./src
@@ -120,7 +110,7 @@ all: $(TARGET).elf
 -include $(DEPS)
 
 dirs: dep obj cube
-dep obj src:
+dep obj src linker:
 	@echo "[MKDIR]   $@"
 	$Qmkdir -p $@
 
@@ -137,7 +127,7 @@ $(TARGET).elf: $(OBJS)
 	$(SIZE) $(TARGET).elf
 
 program: all
-	$(OCD) -c "program $(TARGET).elf verify reset" $(OCDFLAGS)
+	$(OCD) -s $(OCD_DIR) $(OCDFLAGS) -c "program $(TARGET).elf verify reset"
 
 debug:
 	$(GDB)  -ex "target remote | openocd $(OCDFLAGS) -c 'gdb_port pipe'" \
@@ -151,11 +141,11 @@ cube:
 	chmod -R u+w cube
 	rm -f cube.zip
 
-template: cube src
+template: cube src linker
 	cp -ri $(CUBE_DIR)/Projects/$(BOARD)/$(EXAMPLE)/Src/* src
 	cp -ri $(CUBE_DIR)/Projects/$(BOARD)/$(EXAMPLE)/Inc/* src
 	cp -i $(DEV_DIR)/Source/Templates/gcc/startup_$(MCU_LC).s src
-	cp -i $(DEV_DIR)/Source/Templates/gcc/linker/$(MCU_UC)_FLASH.ld scripts/$(MCU_LC).ld
+	cp -i $(CUBE_DIR)/Projects/$(BOARD)/Templates/TrueSTUDIO/$(BOARD)/$(MCU_UC)_FLASH.ld linker/$(MCU_LC).ld
 
 clean:
 	@echo "[RM]      $(TARGET).elf"; rm -f $(TARGET).elf
